@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Till with Change</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            min-height: 100vh;
+            background-color: #f0f4f8;
+        }
+        .container {
+            width: 100%;
+            max-width: 900px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        @media (min-width: 768px) {
+            .container {
+                flex-direction: row;
+            }
+        }
+        .column {
+            flex: 1;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #f9fafb;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        input, button {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #itemList {
+            list-style-type: none;
+            padding: 0;
+            margin-top: 10px;
+        }
+        #itemList li {
+            background-color: #e9ecef;
+            margin-bottom: 5px;
+            padding: 8px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .item-remove {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .error-message {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        #changeDisplay p {
+            font-size: 1.2em;
+            margin: 5px 0;
+            color: #343a40;
+        }
+        #reader {
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 2px solid #ced4da;
+        }
+        .title {
+            text-align: center;
+            font-size: 2em;
+            margin-bottom: 20px;
+            color: #212529;
+        }
+        .summary-section {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <h1 class="title">QR Till with Change</h1>
+    <div class="container">
+        <div class="column">
+            <h2>Scan an Item</h2>
+            <div id="reader"></div>
+            <div id="message-box" style="margin-top: 10px; font-weight: bold;"></div>
+        </div>
+
+        <div class="column">
+            <h2>Add Item Manually</h2>
+            <p>Enter item prices below:</p>
+            <input type="text" id="priceInput" placeholder="Item Price">
+            <button onclick="addItem()">Add Item</button>
+            <ul id="itemList"></ul>
+            <div class="summary-section">
+                <p>Total: <span id="total">£0.00</span></p>
+                <p>Payment: <input type="text" id="paymentInput"></p>
+                <button onclick="calculateChange()">Calculate Change</button>
+                <p>Change Due: <span id="change">£0.00</span></p>
+                <div id="changeDisplay"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let items = [];
+        const denominations = [5000, 2000, 1000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
+
+        const showMessage = (text, type = 'info') => {
+            const messageBox = document.getElementById('message-box');
+            messageBox.textContent = text;
+            messageBox.style.color = type === 'error' ? '#dc3545' : '#155724';
+            messageBox.style.display = 'block';
+            setTimeout(() => messageBox.style.display = 'none', 3000);
+        };
+
+        function addItem(price, name = 'Item') {
+            if (!isNaN(price) && price > 0) {
+                items.push({name, price: Math.round(price * 100)});
+                updateItemList();
+                updateTotal();
+                if (price.toString() === document.getElementById("priceInput").value) {
+                    document.getElementById("priceInput").value = "";
+                }
+                showMessage(`Added ${name}: £${price.toFixed(2)}`, 'success');
+            } else if (!price) {
+                const manualPrice = parseFloat(document.getElementById("priceInput").value);
+                if (!isNaN(manualPrice) && manualPrice > 0) {
+                    addItem(manualPrice, 'Manual Item');
+                } else {
+                    showMessage('Please enter a valid price.', 'error');
+                }
+            }
+        }
+
+        function removeItem(index) {
+            if (index >= 0 && index < items.length) {
+                const removedItem = items.splice(index, 1)[0];
+                updateItemList();
+                updateTotal();
+                showMessage(`Removed ${removedItem.name}: £${(removedItem.price / 100).toFixed(2)}`, 'info');
+            }
+        }
+
+        function updateItemList() {
+            const list = document.getElementById('itemList');
+            list.innerHTML = '';
+            items.forEach((item, index) => {
+                const listItem = document.createElement('li');
+                listItem.innerHTML = `
+                    <span>${item.name}: £${(item.price / 100).toFixed(2)}</span>
+                    <button class="item-remove" onclick="removeItem(${index})">X</button>
+                `;
+                list.appendChild(listItem);
+            });
+        }
+
+        function updateTotal() {
+            let totalInPence = items.reduce((a, b) => a + b.price, 0);
+            let totalInPounds = (totalInPence / 100).toFixed(2);
+            document.getElementById("total").textContent = "£" + totalInPounds;
+        }
+
+        function calculateChange() {
+            const payment = parseFloat(document.getElementById("paymentInput").value);
+            const totalInPence = items.reduce((a, b) => a + b.price, 0);
+            const paymentInPence = Math.round(payment * 100);
+            
+            document.getElementById("change").textContent = "£0.00";
+            document.getElementById("changeDisplay").innerHTML = "";
+
+            if (isNaN(payment) || payment <= 0) {
+                document.getElementById("changeDisplay").innerHTML = `<p class="error-message">Please enter a valid payment amount.</p>`;
+                return;
+            }
+
+            if (paymentInPence > totalInPence) {
+                const changeInPence = paymentInPence - totalInPence;
+                const changeInPounds = (changeInPence / 100).toFixed(2);
+                document.getElementById("change").textContent = "£" + changeInPounds;
+                displayChangeInWords(changeInPence);
+            } else if (paymentInPence === totalInPence) {
+                document.getElementById("changeDisplay").innerHTML = `<h3>No change due.</h3>`;
+            } else {
+                const shortByInPence = totalInPence - paymentInPence;
+                const shortByInPounds = (shortByInPence / 100).toFixed(2);
+                document.getElementById("changeDisplay").innerHTML = `<p class="error-message">Customer is short by: £${shortByInPounds}</p>`;
+            }
+        }
+
+        function displayChangeInWords(changeInPence) {
+            let changeBreakdown = "<h3>Change Breakdown:</h3>";
+            let remainingChange = changeInPence;
+            for (let i = 0; i < denominations.length; i++) {
+                const denominationInPence = denominations[i];
+                if (remainingChange >= denominationInPence) {
+                    const count = Math.floor(remainingChange / denominationInPence);
+                    remainingChange -= count * denominationInPence;
+                    const displayValue = denominationInPence >= 100 ? `£${denominationInPence / 100}` : `${denominationInPence}p`;
+                    const currencyType = denominationInPence >= 500 ? "note" : "coin";
+                    const plural = count > 1 ? "s" : "";
+                    changeBreakdown += `<p>${count} x ${displayValue} ${currencyType}${plural}</p>`;
+                }
+            }
+            document.getElementById("changeDisplay").innerHTML = changeBreakdown;
+        }
+
+        const html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader", {
+                fps: 10,
+                qrbox: {
+                    width: 250,
+                    height: 250
+                }
+            },
+            false);
+
+        function onScanSuccess(decodedText) {
+            console.log(`Code matched = ${decodedText}`);
+            try {
+                const [itemName, itemPriceString] = decodedText.split('|');
+                const price = parseFloat(itemPriceString);
+                if (!isNaN(price) && price > 0) {
+                    addItem(price, itemName);
+                } else {
+                    showMessage("Invalid QR code data. Expected 'Item Name|Price'", 'error');
+                }
+            } catch (e) {
+                showMessage("Error processing QR code.", 'error');
+            }
+        }
+
+        html5QrcodeScanner.render(onScanSuccess);
+
+        document.getElementById('reset-button').addEventListener('click', () => {
+            items = [];
+            document.getElementById('paymentInput').value = '';
+            document.getElementById('change').textContent = '£0.00';
+            document.getElementById('changeDisplay').innerHTML = '';
+            updateItemList();
+            updateTotal();
+            showMessage('Till reset.', 'info');
+        });
+    </script>
+</body>
+</html>
